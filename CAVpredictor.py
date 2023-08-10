@@ -3,10 +3,11 @@ import pandas as pd
 from torch.utils.data import Dataset
 import torch
 from sklearn import svm
+from sklearn.metrics import accuracy_score
 
 
 # calculate cav feature vectors for all images, and create abs sample feature vectors
-class CavPrediction:
+class CAVFeatureVectorGenerator:
     def __init__(self, dataset_embeddings, pred_labels_pairs, cavs_path):
         self.path_cavs = cavs_path
         self.cav_names = os.listdir(self.path_cavs)
@@ -57,8 +58,7 @@ class CavPrediction:
                 print("ERROR: bad feature lengths for ", sample)
                 return None
         columns = ["IDENTITIY_NAME_1", "IMAGE_NAME_1", "IDENTITIY_NAME_2", "IMAGE_NAME_2", "LABEL", "SPLIT"] + self.cav_columns
-        pd.DataFrame(abs_feat_vectors, columns=columns).to_csv(self.cav_feature_save_location)
-
+        pd.DataFrame(abs_feat_vectors, columns=columns).to_csv(path_to_abs_feature_vectors)
 
     def load_feature_vectors(self, path_to_feature_vectors):
         return pd.read_csv(path_to_feature_vectors)
@@ -95,8 +95,51 @@ class ModelPredictorWithCAVS:
             return feature_vectors, labels
 
     def train(self):
-        self.model.fit(self.train_dataset.getAll())
+        train_data, train_labels = self.train_dataset.getAll()
+        self.model.fit(train_data, train_labels)
 
     def test(self):
         test_data, test_labels = self.test_dataset.getAll()
-        print(self.model.predict(test_data[0]))
+        predicitons = [self.model.predict(test_feat_vect) for test_feat_vect in test_data]
+        return predicitons, test_labels
+
+def main():
+    # path to trained cav models
+    path_to_cavs = ""
+    # path to feature vectors for each image in the dataset, generated using embeddings and cavs
+    path_to_cav_feature_vectors = ""
+    # path to feature vector for each sample in the given protocol, generated with abs difference of pairs of img_cav_feat_vects
+    path_to_abs_feature_vectors = ""
+    # path to wanted protocol(doppel or ViSE)
+    path_to_protocol = ""
+
+    # dictionary of embeddings {identity:{img:[embedding]}}
+    dataset_embeddings = {}
+    # list of predictions and pair of images [[predicted label, pair 1, pair 2]]
+    pred_labels_pairs = []
+
+    # create instance of CAVFeatureVectorGenerator
+    cav_feat_vect_generator = CAVFeatureVectorGenerator(dataset_embeddings, pred_labels_pairs, path_to_cavs)
+    # generate a feature vector for all images
+    cav_feat_vect_generator.create_feature_vectors(path_to_cav_feature_vectors)
+    # using generated feature vector for all images, create abs feature vector for each sample in a protocol
+    cav_feat_vect_generator.create_abs_feature_vectors(path_to_protocol, path_to_abs_feature_vectors)
+
+    predictions = []
+    labels = []
+    for test_split in range(10):
+        cav_pred = ModelPredictorWithCAVS(path_to_abs_feature_vectors, path_to_protocol, test_split)
+        cav_pred.train()
+        preds, label = cav_pred.test()
+        predictions += preds
+        labels += label
+
+    print("predictions: ", predictions)
+    print("labels: ", labels)
+    print("lengths: ", len(predictions), len(labels))
+    if len(predictions) == len(labels):
+        acc = accuracy_score(labels, predictions)
+        print("Accuracy: ", acc)
+
+if __name__ == '__main__':
+    main()
