@@ -44,13 +44,16 @@ class CAVFeatureVectorGenerator:
         pd.DataFrame(cav_id_img_name, columns=columns).to_csv(self.cav_feature_save_location)
 
     # make abs diff feature vectors for all samples using cav_feature_vectors and protocol
-    def create_abs_feature_vectors(self, path_to_protocol, path_to_abs_feature_vectors):
+    def create_abs_feature_vectors(self, path_to_abs_feature_vectors):
         cav_feat_vectors = self.load_feature_vectors(self.cav_feature_save_location)
-        protocol = pd.read_csv(path_to_protocol, header=False).values.tolist()
         abs_feat_vectors = []
-        for sample_idx, sample in enumerate(protocol):
-            feature_vector_1 = cav_feat_vectors.loc[(cav_feat_vectors["IDENTITIY_NAME"] == sample[0]) & (cav_feat_vectors["IMAGE_NAME"] == sample[1])][self.cav_columns].values.tolist()
-            feature_vector_2 = cav_feat_vectors.loc[(cav_feat_vectors["IDENTITIY_NAME"] == sample[2]) & (cav_feat_vectors["IMAGE_NAME"] == sample[3])][self.cav_columns].values.tolist()
+        for sample_idx, sample in enumerate(self.pred_labels_pairs):
+            name1 = sample[1]
+            name2 = sample[2]
+            img1 = sample[1]
+            img2 = sample[2]
+            feature_vector_1 = cav_feat_vectors.loc[(cav_feat_vectors["IDENTITIY_NAME"] == name1) & (cav_feat_vectors["IMAGE_NAME"] == img1)][self.cav_columns].values.tolist()
+            feature_vector_2 = cav_feat_vectors.loc[(cav_feat_vectors["IDENTITIY_NAME"] == name2) & (cav_feat_vectors["IMAGE_NAME"] == img2)][self.cav_columns].values.tolist()
             if len(feature_vector_1) == len(self.cav_columns) and len(feature_vector_2) == len(self.cav_columns):
                 feature_vector_abs = [abs(feature_vector_1[idx] - feature_vector_2[idx]) for idx in range(len(feature_vector_1))]
                 abs_feat_vectors.append(sample + feature_vector_abs)
@@ -65,18 +68,16 @@ class CAVFeatureVectorGenerator:
     
 
 class ModelPredictorWithCAVS:
-    def __init__(self, path_to_abs_feature_vectors, path_to_protocol, test_split):
+    def __init__(self, path_to_abs_feature_vectors, test_split):
         self.path_to_abs_feature_vectors = path_to_abs_feature_vectors
-        self.path_to_protocol = path_to_protocol
         self.test_split = test_split
-        self.train_dataset = self.ABS_Feature_Vector_Dataset(self.path_to_abs_feature_vectors, self.path_to_protocol, self.test_split, testing=False)
-        self.test_dataset = self.ABS_Feature_Vector_Dataset(self.path_to_abs_feature_vectors, self.path_to_protocol, self.test_split, testing=True)
+        self.train_dataset = self.ABS_Feature_Vector_Dataset(self.path_to_abs_feature_vectors, self.test_split, testing=False)
+        self.test_dataset = self.ABS_Feature_Vector_Dataset(self.path_to_abs_feature_vectors, self.test_split, testing=True)
         self.model = svm.SVC(C=100, gamma=.001)
 
     class ABS_Feature_Vector_Dataset(Dataset):
-        def __init__(self, path_to_abs_feature_vectors, path_to_protocol, test_split, testing):
+        def __init__(self, path_to_abs_feature_vectors, test_split, testing):
             self.abs_feature_vectors = pd.read_csv(path_to_abs_feature_vectors)
-            self.protocol = pd.read_csv(path_to_protocol, header=False).values.tolist()
             self.test_split = test_split
             self.samples = self.abs_feature_vectors[self.abs_feature_vectors.split == test_split if testing else self.abs_feature_vectors.split != test_split].values.tolist()
 
@@ -110,8 +111,6 @@ def main():
     path_to_cav_feature_vectors = ""
     # path to feature vector for each sample in the given protocol, generated with abs difference of pairs of img_cav_feat_vects
     path_to_abs_feature_vectors = ""
-    # path to wanted protocol(doppel or ViSE)
-    path_to_protocol = ""
 
     # TODO: the code after this assumes dataset embeddings, and pred labels pairs are in the desired format, this will need more code to get to this point
     # dictionary of embeddings {identity:{img:[embedding]}}
@@ -124,22 +123,22 @@ def main():
     # generate a feature vector for all images
     cav_feat_vect_generator.create_feature_vectors(path_to_cav_feature_vectors)
     # using generated feature vector for all images, create abs feature vector for each sample in a protocol
-    cav_feat_vect_generator.create_abs_feature_vectors(path_to_protocol, path_to_abs_feature_vectors)
+    cav_feat_vect_generator.create_abs_feature_vectors(path_to_abs_feature_vectors)
 
     predictions = []
-    labels = []
+    pred_labels = []
     for test_split in range(10):
-        cav_pred = ModelPredictorWithCAVS(path_to_abs_feature_vectors, path_to_protocol, test_split)
+        cav_pred = ModelPredictorWithCAVS(path_to_abs_feature_vectors, test_split)
         cav_pred.train()
-        preds, label = cav_pred.test()
+        preds, labels = cav_pred.test()
         predictions += preds
-        labels += label
+        pred_labels += labels
 
     print("predictions: ", predictions)
-    print("labels: ", labels)
-    print("lengths: ", len(predictions), len(labels))
-    if len(predictions) == len(labels):
-        acc = accuracy_score(labels, predictions)
+    print("labels: ", pred_labels)
+    print("lengths: ", len(predictions), len(pred_labels))
+    if len(predictions) == len(pred_labels):
+        acc = accuracy_score(pred_labels, predictions)
         print("Accuracy: ", acc)
 
 if __name__ == '__main__':
