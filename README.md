@@ -16,3 +16,8 @@ With SSH:
 git clone git@github.com:ydwen/opensphere.git
 ```
 
+Download datasets for opensphere:
+```console
+cd opensphere
+bash scripts/dataset_setup.sh
+```
