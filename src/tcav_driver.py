@@ -14,10 +14,10 @@ import numpy as np
 from PIL import Image
 from tqdm import tqdm
 
-sys.path.insert(0, "/home/nthom/Documents/opensphere/")
+from .opensphere.utils import fill_config
 
-from test_embeddings import main_worker, parse_args
-from utils import fill_config
+# from test_embeddings import main_worker, parse_args
+# from utils import fill_config
 
 def open_resize_save_image(input_path, output_path, new_size):
     try:
