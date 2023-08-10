@@ -113,6 +113,7 @@ def main():
     # path to wanted protocol(doppel or ViSE)
     path_to_protocol = ""
 
+    # TODO: the code after this assumes dataset embeddings, and pred labels pairs are in the desired format, this will need more code to get to this point
     # dictionary of embeddings {identity:{img:[embedding]}}
     dataset_embeddings = {}
     # list of predictions and pair of images [[predicted label, pair 1, pair 2]]
