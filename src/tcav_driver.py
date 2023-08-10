@@ -14,6 +14,7 @@ import numpy as np
 from PIL import Image
 from tqdm import tqdm
 
+from .
 from .opensphere.utils import fill_config
 
 # from test_embeddings import main_worker, parse_args
