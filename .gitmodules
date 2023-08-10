@@ -1,0 +1,3 @@
+[submodule "src/opensphere"]
+	path = src/opensphere
+	url = git@github.com:NateThom/opensphere.git
