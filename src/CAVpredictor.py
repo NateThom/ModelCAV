@@ -8,10 +8,9 @@ from sklearn.metrics import accuracy_score
 
 # calculate cav feature vectors for all images, and create abs sample feature vectors
 class CAVFeatureVectorGenerator:
-    def __init__(self, dataset_embeddings, pred_labels_pairs, cavs_path):
-        self.path_cavs = cavs_path
-        self.cav_names = os.listdir(self.path_cavs)
-        self.embeddings_dict = dataset_embeddings
+    def __init__(self, dataset_embeddings, pred_labels_pairs, cav_dictionary):
+        self.cav_dictionary = cav_dictionary
+        self.embeddings = dataset_embeddings
         self.pred_labels_pairs = pred_labels_pairs
 
     # make initial feature vectors for all images using cavs and embeddings
@@ -19,27 +18,26 @@ class CAVFeatureVectorGenerator:
         self.cav_feature_save_location = path_to_feature_save
         CAV_vectors = []
         cav_id_img_name = []
-        for cav_idx, cav_pickle in enumerate(self.cav_names):
+        for cav_idx, cav_name in enumerate(self.cav_dictionary):
             cav_features = []
-            # TODO: open 1 cav
-            cav_model = open(cav_pickle)
-            for identity_name in self.embeddings_dict:
-                for embedding in identity_name:
-                    image_name = ""
-                    # TODO: pass embeding through cav model, this should return 1 number
-                    feature = cav_model * embedding
-                    cav_features.append(feature)
+            cav_model = self.cav_dictionary[cav_name]
+            for embedding_idx, embedding in enumerate(self.embeddings):
+                # TODO: pass embeding through cav model, this should return 1 number
+                feature = cav_model.weights * embedding + cav_model.bias
+                cav_features.append(feature)
 
-                    # only want each image to have 1 row
-                    if cav_idx == 0:
-                        cav_id_img_name.append([identity_name, image_name])
+                # only want each image to have 1 row
+                if cav_idx == 0:
+                    cav_id_img_name.append([embedding_idx])
 
             CAV_vectors.append(cav_features)
+
         for cav_id in range(len(CAV_vectors)):
             for cav_feature in range(len(CAV_vectors[cav_id])):
                 cav_id_img_name[cav_feature].append(CAV_vectors[cav_id][cav_feature])
+
         self.cav_columns = [f"CAV_{p}" for p in self.cav_names]
-        columns = ["IDENTITIY_NAME", "IMAGE_NAME"] + self.cav_columns
+        columns = ["EMBEDDING_INDEX"] + self.cav_columns
         # in the format with rows being 1 image, and samples being 
         pd.DataFrame(cav_id_img_name, columns=columns).to_csv(self.cav_feature_save_location)
 
@@ -48,19 +46,17 @@ class CAVFeatureVectorGenerator:
         cav_feat_vectors = self.load_feature_vectors(self.cav_feature_save_location)
         abs_feat_vectors = []
         for sample_idx, sample in enumerate(self.pred_labels_pairs):
-            name1 = sample[1]
-            name2 = sample[2]
-            img1 = sample[1]
-            img2 = sample[2]
-            feature_vector_1 = cav_feat_vectors.loc[(cav_feat_vectors["IDENTITIY_NAME"] == name1) & (cav_feat_vectors["IMAGE_NAME"] == img1)][self.cav_columns].values.tolist()
-            feature_vector_2 = cav_feat_vectors.loc[(cav_feat_vectors["IDENTITIY_NAME"] == name2) & (cav_feat_vectors["IMAGE_NAME"] == img2)][self.cav_columns].values.tolist()
+            embedding_index_1 = sample[1]
+            embedding_index_2 = sample[2]
+            feature_vector_1 = cav_feat_vectors.loc[(cav_feat_vectors["EMBEDDING_INDEX"] == embedding_index_1)][self.cav_columns].values.tolist()
+            feature_vector_2 = cav_feat_vectors.loc[(cav_feat_vectors["EMBEDDING_INDEX"] == embedding_index_2)][self.cav_columns].values.tolist()
             if len(feature_vector_1) == len(self.cav_columns) and len(feature_vector_2) == len(self.cav_columns):
-                feature_vector_abs = [abs(feature_vector_1[idx] - feature_vector_2[idx]) for idx in range(len(feature_vector_1))]
+                feature_vector_abs = [abs(feature_vector_1[idx] - feature_vector_2[idx]) for idx in range(len(self.cav_columns))]
                 abs_feat_vectors.append(sample + feature_vector_abs)
             else:
                 print("ERROR: bad feature lengths for ", sample)
                 return None
-        columns = ["IDENTITIY_NAME_1", "IMAGE_NAME_1", "IDENTITIY_NAME_2", "IMAGE_NAME_2", "LABEL", "SPLIT"] + self.cav_columns
+        columns = ["LABEL", "EMBEDDING_INDEX_1", "EMBEDDING_INDEX_2", "SPLIT"] + self.cav_columns
         pd.DataFrame(abs_feat_vectors, columns=columns).to_csv(path_to_abs_feature_vectors)
 
     def load_feature_vectors(self, path_to_feature_vectors):
