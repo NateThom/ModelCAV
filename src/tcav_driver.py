@@ -18,6 +18,7 @@ sys.path.insert(0, "./src/opensphere/")
 # from test_individual_dataset import main_worker, parse_args
 import test_individual_dataset
 import test_other_dataset
+from dataset.utils import get_metrics
 
 class LinearClassifier(nn.Module):
     def __init__(self, input_size, num_classes):
@@ -184,27 +185,25 @@ def main():
         with open(embeddings_pickle_path, 'rb') as f:
             model_embeddings = pickle.load(f)
 
-    # create_CAVs(model_embeddings, config)
+    create_CAVs(model_embeddings, config)
 
-    # selected_concepts = random.sample(
-    #     list(model_embeddings), 
-    #     config["CAV_data"]["num_concepts_to_select"]
-    # )
-    # cav_dict = load_CAVs(selected_concepts, config)
-    # print(cav_dict)
+    selected_concepts = random.sample(
+        list(model_embeddings), 
+        config["CAV_data"]["num_concepts_to_select"]
+    )
+    cav_dict = load_CAVs(selected_concepts, config)
+    print(cav_dict)
 
     config["data"] = {}
     config["data"]["test"] = config["model_predictions_data"]
-    # print(config["model_predictions_data"])
-    # for predict_config in range(len(config["model_predictions_data"])):
-    #     config["data"]["test"].append(
-    #         {
-    #             "dataset": predict_config["dataset"], 
-    #             "dataloader": predict_config["dataloader"]
-    #         }
-    #     )
-    model_embeddings, model_predictions = test_other_dataset.main_worker(config)
-    temp = 1
+
+    model_embeddings, model_predictions, model_labels = test_other_dataset.main_worker(config)
+    
+    results = get_metrics(
+        model_labels["LFW"], 
+        model_predictions["LFW"], 
+        ['1e-4', '5e-4', '1e-3', '5e-3', '5e-2']
+    )
 
 if __name__=="__main__":
     main()
