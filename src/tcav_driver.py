@@ -1,8 +1,8 @@
 import sys
 import yaml
 import os
-import math
 import pickle
+import random
 
 import torch
 import torch.nn as nn
@@ -15,7 +15,9 @@ from PIL import Image
 from tqdm import tqdm
 
 sys.path.insert(0, "./src/opensphere/")
-from test_embeddings import main_worker, parse_args
+# from test_individual_dataset import main_worker, parse_args
+import test_individual_dataset
+import test_other_dataset
 
 class LinearClassifier(nn.Module):
     def __init__(self, input_size, num_classes):
@@ -90,16 +92,14 @@ def create_datasets(concepts, config):
             ann_output_df.to_csv(current_concept_dataset["ann_path"], sep=" ", index=None, header=None)
     return config
 
-def create_CAVs(model_embeddings, config):
+def create_CAVs(model_embeddings, config):    
     for concept in tqdm(model_embeddings):
         if os.path.isfile(f"CAVs/{config['CAV_data']['source_name']}/{concept}.pth"):
             continue
 
-        print(concept)
-        
         concept_samples = model_embeddings[concept].to("cuda")
         concept_labels = torch.ones(concept_samples.shape[0], dtype=torch.float).to("cuda")
-        
+
         random_samples = []
         for i in model_embeddings:
             if i != concept:
@@ -138,55 +138,26 @@ def create_CAVs(model_embeddings, config):
                 break
             # if iteration % 1000 == 0:
             #     print(iteration, acc, f1, loss.item())
-        print(f"Iteration: {iteration}, Acc.: {acc}, F1: {f1}")
+        # print(f"Iteration: {iteration}, Acc.: {acc}, F1: {f1}")
         torch.save(
             classifier.state_dict(), 
             f"CAVs/{config['CAV_data']['source_name']}/{concept}.pth"
         )
-        # print(classifier.weight[0])
 
-        # with torch.no_grad():
-        #     avg_dot = 0
-        #     for index in range(len(concept_samples)):
-        #         avg_dot += (
-        #             torch.dot(
-        #                 concept_samples[index], 
-        #                 classifier.weight[0]
-        #             ) + classifier.bias
-        #         )
-        #     avg_dot /= concept_samples.shape[0]
-        #     print(f"Avg. Concept Dot: {avg_dot}")
-
-        #     print("####################")
-        #     avg_dot = 0
-        #     for index in range(len(random_samples)):
-        #         # print(input.shape, classifier.weight.shape)
-        #         avg_dot += (
-        #             torch.dot(
-        #                 random_samples[index], 
-        #                 classifier.weight[0]
-        #             ) + classifier.bias
-        #         )
-        #         # print(
-        #         #     torch.dot(
-        #         #         random_samples[index], 
-        #         #         classifier.weight[0]
-        #         #     ) + classifier.bias
-        #         # )
-        #     avg_dot /= random_samples.shape[0]
-        #     print(f"Avg. Random Dot: {avg_dot}")
-
-        #     print("####################")
-        
-def load_CAV(input_dim, output_dim, path, device):
-    CAV = LinearClassifier(input_dim, output_dim)
-    CAV.load_state_dict(torch.load(path)).to(device)
-    CAV.eval()
-    return CAV
+def load_CAVs(selected_concepts, config):
+    cav_dict = {}
+    for concept in selected_concepts:
+        CAV = LinearClassifier(512, 1)
+        CAV.load_state_dict(
+            torch.load(f"CAVs/{config['CAV_data']['source_name']}/{concept}.pth")
+        ).to("cuda")
+        CAV.eval()
+        cav_dict[concept] = CAV
+    return cav_dict
 
 def main():
     # get arguments and config
-    args = parse_args()
+    args = test_individual_dataset.parse_args()
 
     with open(args.config, 'r') as f:
         config = yaml.load(f, yaml.SafeLoader)
@@ -202,24 +173,38 @@ def main():
 
     concepts = os.listdir(config["CAV_data"]["concept_data_path"])
 
-    selected_concepts = np.random.choice(
-        concepts, 
-        size=config["CAV_data"]["num_concepts_to_select"], 
-        replace=False
-    )
-
     embeddings_pickle_path = "./embeddings/" + config["CAV_data"]["source_name"] + ".pkl"
     if not os.path.isfile(embeddings_pickle_path):
-        config = create_datasets(selected_concepts, config)
+        config = create_datasets(concepts, config)
 
-        model_embeddings = main_worker(config)
+        model_embeddings = test_individual_dataset.main_worker(config)
         with open(embeddings_pickle_path, 'wb') as f:
             pickle.dump(model_embeddings, f)
     else:
         with open(embeddings_pickle_path, 'rb') as f:
             model_embeddings = pickle.load(f)
-    
-    create_CAVs(model_embeddings, config)
+
+    # create_CAVs(model_embeddings, config)
+
+    # selected_concepts = random.sample(
+    #     list(model_embeddings), 
+    #     config["CAV_data"]["num_concepts_to_select"]
+    # )
+    # cav_dict = load_CAVs(selected_concepts, config)
+    # print(cav_dict)
+
+    config["data"] = {}
+    config["data"]["test"] = config["model_predictions_data"]
+    # print(config["model_predictions_data"])
+    # for predict_config in range(len(config["model_predictions_data"])):
+    #     config["data"]["test"].append(
+    #         {
+    #             "dataset": predict_config["dataset"], 
+    #             "dataloader": predict_config["dataloader"]
+    #         }
+    #     )
+    model_embeddings, model_predictions = test_other_dataset.main_worker(config)
+    temp = 1
 
 if __name__=="__main__":
     main()
