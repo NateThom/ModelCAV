@@ -151,7 +151,8 @@ def load_CAVs(selected_concepts, config):
         CAV = LinearClassifier(512, 1)
         CAV.load_state_dict(
             torch.load(f"CAVs/{config['CAV_data']['source_name']}/{concept}.pth")
-        ).to("cuda")
+        )
+        CAV = CAV.to("cuda")
         CAV.eval()
         cav_dict[concept] = CAV
     return cav_dict
@@ -192,18 +193,20 @@ def main():
         config["CAV_data"]["num_concepts_to_select"]
     )
     cav_dict = load_CAVs(selected_concepts, config)
-    print(cav_dict)
+    # print(cav_dict)
 
     config["data"] = {}
     config["data"]["test"] = config["model_predictions_data"]
 
-    model_embeddings, model_predictions, model_labels = test_other_dataset.main_worker(config)
+    model_embedding_pairs, model_predictions, model_labels = test_other_dataset.main_worker(config)
     
     results = get_metrics(
         model_labels["LFW"], 
         model_predictions["LFW"], 
         ['1e-4', '5e-4', '1e-3', '5e-3', '5e-2']
     )
+    
+    temp=1
 
 if __name__=="__main__":
     main()
